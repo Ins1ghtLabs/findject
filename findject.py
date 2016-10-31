@@ -28,10 +28,12 @@ import sys
 import os
 from repoze.lru import LRUCache
 from sets import Set
+from multiprocessing import Pool,Manager
 
 
 PORT_SET = {80} #only inspect TCP port 80
-
+manager = Manager()
+results=manager.list()
 
 def get_key(ip, tcp):
     five_tuple = ip.src + ":" + str(tcp.sport) + "\t" + ip.dst + ":" + str(tcp.dport)
@@ -65,13 +67,14 @@ def get_ip_packet(buf, pcap):
         print >> sys.stderr, "unknown datalink!"
         exit
 
-def injection_found(ip, tcp, old_tcp_data):
-    print("")
-    print("PACKET INJECTION " + get_five_tuple_string(ip,tcp) + " \tSEQ : " + str(tcp.seq))
-    print("FIRST :")
-    print(repr(old_tcp_data))
-    print("LAST  :")
-    print(repr(tcp.data))
+def injection_found(fn,ip, tcp, old_tcp_data):
+    res=dict()
+    res["filename"]=fn
+    res["header"]="PACKET INJECTION " + get_five_tuple_string(ip,tcp) + " \tSEQ : " + str(tcp.seq)
+    res["first"]=repr(old_tcp_data)
+    res["last"]=repr(tcp.data)
+    results.append(res)
+    print "Found injection:",res
 
 
 def find_injections(pcap_file):
@@ -119,29 +122,32 @@ def find_injections(pcap_file):
                                     if(len(tcp.data) > len(_cached_tcp_data)):
                                         #new data is longer, store that
                                         if(tcp.data[:len(_cached_tcp_data)] != _cached_tcp_data):
-                                            injection_found(ip, tcp, _cached_tcp_data)
+                                            injection_found(pcap_file,ip, tcp, _cached_tcp_data)
                                             injection_count+=1
                                         _cache.put(key, tcp.data)
                                     elif(len(tcp.data) < len(_cached_tcp_data)):
                                         if(tcp.data != _cached_tcp_data[:len(tcp.data)]):
-                                            injection_found(ip, tcp, _cached_tcp_data)
+                                            injection_found(pcap_file,ip, tcp, _cached_tcp_data)
                                             injection_count+=1
                                     else:
-                                        injection_found(ip, tcp, _cached_tcp_data)
+                                        injection_found(pcap_file,ip, tcp, _cached_tcp_data)
                                         injection_count+=1
             except dpkt.dpkt.NeedData:
                 pass
     if(injection_count == 0):
-        print(" - no injections")
+        print(pcap_file+" - no injections")
 
 
 if len(sys.argv) < 2:
     sys.exit('Usage: %s dump.pcap' % sys.argv[0])
 
+flist=list()
+pool = Pool(processes=4)
 
 for file in sys.argv[1:]:
     if not os.path.exists(file):
         print("ERROR: File %s does not exist!" % file)
     else:
-        sys.stdout.write("opening " + file)
-        find_injections(file)
+        flist.append(file)
+#print flist
+pool.map(find_injections, flist)
