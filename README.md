@@ -12,3 +12,4 @@ Forked from https://www.netresec.com/?page=findject
 
 ##Changelog:
 Added support for BSD's DLT_NULL datalink
+Added multithread(multiprocessing) support
