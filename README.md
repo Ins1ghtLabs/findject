@@ -8,3 +8,7 @@ Findject is a simple pyhton script that can find injected TCP packets in HTTP se
 Findject is open source software and is released under the GNU General Public License version 2 (GPLv2).
 
 Forked from https://www.netresec.com/?page=findject
+
+
+##Changelog:
+Added support for BSD's DLT_NULL datalink
